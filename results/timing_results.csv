@@ -1,0 +1,17 @@
+image,size,avg_time_us
+lena.jpg,128,66
+lena.jpg,256,167
+lena.jpg,512,335
+lena.jpg,1024,647
+baboon.jpg,128,99
+baboon.jpg,256,255
+baboon.jpg,512,848
+baboon.jpg,1024,1933
+fruits.jpg,128,82
+fruits.jpg,256,130
+fruits.jpg,512,335
+fruits.jpg,1024,517
+building.jpg,128,80
+building.jpg,256,185
+building.jpg,512,509
+building.jpg,1024,1052
