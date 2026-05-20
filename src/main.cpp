@@ -3,34 +3,28 @@
 #include <fstream>
 #include <chrono>
 #include <vector>
+#include <filesystem>
 
-using namespace cv;
+#include "canny.hpp"
+
 using namespace std;
-using namespace std::chrono;
 
 int main()
 {
     vector<int> sizes = {128, 256, 512, 1024};
 
-    vector<string> imageNames =
+    string imageDir = "../images";
+    string outputDir = "../output";
+
+    ofstream results("../results/timing_results.csv");
+    results << "image,size,time_us\n";
+
+    for (const auto& entry : filesystem::directory_iterator(imageDir))
     {
-        "lena.jpg",
-        "baboon.jpg",
-        "fruits.jpg",
-        "building.jpg"
-    };
+        if (!entry.is_regular_file()) continue;
 
-    ofstream resultFile("../results/timing_results.csv");
-
-    resultFile << "image,size,avg_time_us\n";
-
-    int iterations = 30; // IMPORTANT for stable timing
-
-    for (const string& imageName : imageNames)
-    {
-        string imagePath = "../images/" + imageName;
-
-        Mat original = imread(imagePath, IMREAD_GRAYSCALE);
+        string imageName = entry.path().filename().string();
+        cv::Mat original = cv::imread(entry.path().string(), cv::IMREAD_GRAYSCALE);
 
         if (original.empty())
         {
@@ -42,45 +36,29 @@ int main()
 
         for (int size : sizes)
         {
-            Mat resized;
-            resize(original, resized, Size(size, size));
+            cv::Mat resized;
+            cv::resize(original, resized, cv::Size(size, size));
 
-            Mat edges;
+            auto start = chrono::high_resolution_clock::now();
 
-            long long totalTime = 0;
+            cv::Mat edges = customCanny(resized);
 
-            // Warm-up (important for caching)
-            Canny(resized, edges, 100, 200);
+            auto stop = chrono::high_resolution_clock::now();
 
-            for (int i = 0; i < iterations; i++)
-            {
-                auto start = high_resolution_clock::now();
+            auto duration =
+                chrono::duration_cast<chrono::microseconds>(stop - start);
 
-                Canny(resized, edges, 100, 200);
+            string outPath = outputDir + "/edge_" + imageName + "_" + to_string(size) + ".png";
+            cv::imwrite(outPath, edges);
 
-                auto stop = high_resolution_clock::now();
+            cout << size << "x" << size << " -> " << duration.count() << " us\n";
 
-                totalTime += duration_cast<microseconds>(stop - start).count();
-            }
-
-            long long avgTime = totalTime / iterations;
-
-            cout << size << "x" << size
-                 << " -> " << avgTime << " us" << endl;
-
-            resultFile << imageName << ","
-                       << size << ","
-                       << avgTime << "\n";
-
-            // Save output image (optional but good for report)
-            string outputName = "../output/" + imageName + "_" + to_string(size) + ".png";
-            imwrite(outputName, edges);
+            results << imageName << "," << size << "," << duration.count() << "\n";
         }
     }
 
-    resultFile.close();
-
-    cout << "\nFinished benchmarking.\n";
-
+    results.close();
+    cout << "\nBenchmark finished.\n";
     return 0;
 }
+
