@@ -25,17 +25,35 @@ The benchmark measures the execution time of the Canny algorithm for different i
 canny/
 ├── CMakeLists.txt
 ├── README.md
-├── script.py
-├── images/
-│   ├── lena.jpg
+├── build
+├── images
+│   ├── Red_Apple.jpg
+│   ├── Shaki_waterfall.jpg
+│   ├── Tiger.50.jpg
 │   ├── baboon.jpg
+│   ├── board.jpg
+│   ├── building.jpg
+│   ├── butterfly.jpg
+│   ├── chessboard.png
+│   ├── digits.png
 │   ├── fruits.jpg
-│   └── building.jpg
-├── output/
-├── results/
+│   ├── graf1.png
+│   ├── lena.jpg
+│   ├── messi5.jpg
+│   ├── orange.jpg
+│   ├── pic2.png
+│   ├── pic4.png
+│   ├── smarties.png
+│   ├── starry_night.jpg
+│   └── sudoku.png
+├── include
+│   └── canny.hpp
+├── output/ 
+├── results
 │   └── timing_results.csv
-├── build/
-└── src/
+├── script.py
+└── src
+    ├── canny.cpp
     └── main.cpp
     
 ```
