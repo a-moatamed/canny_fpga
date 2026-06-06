@@ -1,21 +1,10 @@
-#ifndef CANNY_H
-#define CANNY_H
+#ifndef CANNY_HPP
+#define CANNY_HPP
 
-#include <opencv2/opencv.hpp>
+// Pure C++ function signature ready for High Level Synthesis (HLS)
+void canny_fpga_naive(
+    const unsigned char* src, unsigned char* dst, 
+    float* x_buf, float* y_buf, float* mag_buf, float* nms_buf,
+    int rows, int cols, float low_thresh, float high_thresh);
 
-cv::Mat gaussianBlur(const cv::Mat& img);
-
-void computeGradient(const cv::Mat& img,
-                     cv::Mat& magnitude,
-                     cv::Mat& direction);
-
-cv::Mat nonMaxSuppression(const cv::Mat& mag,
-                          const cv::Mat& dir);
-
-cv::Mat hysteresis(const cv::Mat& img,
-                   float low,
-                   float high);
-
-cv::Mat customCanny(const cv::Mat& img);
-
-#endif // CANNY_H
+#endif // CANNY_HPP

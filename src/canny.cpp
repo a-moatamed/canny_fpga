@@ -1,132 +1,134 @@
 #include "canny.hpp"
 #include <cmath>
 
-/* ---------------- Gaussian Blur ---------------- */
-cv::Mat gaussianBlur(const cv::Mat& img)
+#define M_PI 3.14159265358979323846
+
+// Using pointers to flat 1D arrays for hardware synthesis (Maps to AXI Master in HLS)
+void canny_fpga_naive(
+    const unsigned char* src, unsigned char* dst, 
+    float* x_buf, float* y_buf, float* mag_buf, float* nms_buf,
+    int rows, int cols, float low_thresh, float high_thresh) 
 {
-    cv::Mat blurred;
-    cv::GaussianBlur(img, blurred, cv::Size(5, 5), 1.4);
-    return blurred;
-}
+    const int cent = 2; // Fixed to 5x5 mask for hardware static array bounding
+    const float sig = 1.0f;
+    float maskx[5][5], masky[5][5];
 
-/* ---------------- Sobel Gradient ---------------- */
-void computeGradient(const cv::Mat& img, cv::Mat& magnitude, cv::Mat& direction)
-{
-    cv::Mat gx, gy;
-
-    cv::Sobel(img, gx, CV_32F, 1, 0, 3);
-    cv::Sobel(img, gy, CV_32F, 0, 1, 3);
-
-    magnitude = cv::Mat(img.size(), CV_32F);
-    direction = cv::Mat(img.size(), CV_32F);
-
-    for (int i = 0; i < img.rows; i++)
-    {
-        for (int j = 0; j < img.cols; j++)
-        {
-            float x = gx.at<float>(i, j);
-            float y = gy.at<float>(i, j);
-
-            magnitude.at<float>(i, j) = std::sqrt(x * x + y * y);
-            direction.at<float>(i, j) = std::atan2(y, x);
-        }
-    }
-}
-
-/* -------- Non-Maximum Suppression -------- */
-cv::Mat nonMaxSuppression(const cv::Mat& mag, const cv::Mat& dir)
-{
-    cv::Mat nms = cv::Mat::zeros(mag.size(), CV_32F);
-
-    for (int i = 1; i < mag.rows - 1; i++)
-    {
-        for (int j = 1; j < mag.cols - 1; j++)
-        {
-            float angle = dir.at<float>(i, j) * 180.0f / CV_PI;
-            if (angle < 0) angle += 180;
-
-            float q = 255, r = 255;
-
-            if ((0 <= angle && angle < 22.5) || (157.5 <= angle))
-            {
-                q = mag.at<float>(i, j + 1);
-                r = mag.at<float>(i, j - 1);
-            }
-            else if (22.5 <= angle && angle < 67.5)
-            {
-                q = mag.at<float>(i + 1, j - 1);
-                r = mag.at<float>(i - 1, j + 1);
-            }
-            else if (67.5 <= angle && angle < 112.5)
-            {
-                q = mag.at<float>(i + 1, j);
-                r = mag.at<float>(i - 1, j);
-            }
-            else
-            {
-                q = mag.at<float>(i - 1, j - 1);
-                r = mag.at<float>(i + 1, j + 1);
-            }
-
-            nms.at<float>(i, j) =
-                (mag.at<float>(i, j) >= q && mag.at<float>(i, j) >= r)
-                ? mag.at<float>(i, j)
-                : 0;
+    // 1. Generate Gaussian 1st Derivative Masks 
+    // (Vivado HLS will unroll this and create a static hardware ROM at compile time)
+    for (int p = -cent; p <= cent; p++) {
+        for (int q = -cent; q <= cent; q++) {
+            maskx[p+cent][q+cent] = q * std::exp(-1.0f * ((p * p + q * q) / (2.0f * sig * sig)));
+            masky[p+cent][q+cent] = p * std::exp(-1.0f * ((p * p + q * q) / (2.0f * sig * sig)));
         }
     }
 
-    return nms;
-}
+    float max_mag = 0.0f;
 
-/* -------- Hysteresis Thresholding -------- */
-cv::Mat hysteresis(const cv::Mat& img, float low, float high)
-{
-    cv::Mat res = cv::Mat::zeros(img.size(), CV_8U);
-
-    for (int i = 1; i < img.rows - 1; i++)
-    {
-        for (int j = 1; j < img.cols - 1; j++)
-        {
-            float val = img.at<float>(i, j);
-
-            if (val >= high)
-            {
-                res.at<uchar>(i, j) = 255;
+    // 2. Convolution: Blur + Gradient in a single step
+    // Safe boundary to prevent reading outside the image
+    for (int r = cent; r < rows - cent; r++) {
+        for (int c = cent; c < cols - cent; c++) {
+            float sumx = 0.0f, sumy = 0.0f;
+            for (int p = -cent; p <= cent; p++) {
+                for (int q = -cent; q <= cent; q++) {
+                    float pixel = src[(r + p) * cols + (c + q)];
+                    sumx += pixel * maskx[p + cent][q + cent];
+                    sumy += pixel * masky[p + cent][q + cent];
+                }
             }
-            else if (val >= low)
-            {
-                bool connected = false;
+            x_buf[r * cols + c] = sumx;
+            y_buf[r * cols + c] = sumy;
 
-                for (int x = -1; x <= 1 && !connected; x++)
-                {
-                    for (int y = -1; y <= 1; y++)
-                    {
-                        if (img.at<float>(i + x, j + y) >= high)
-                        {
-                            connected = true;
-                            break;
+            float mag = std::sqrt(sumx * sumx + sumy * sumy);
+            mag_buf[r * cols + c] = mag;
+            
+            // Track max magnitude for normalization
+            if (mag > max_mag) {
+                max_mag = mag;
+            }
+        }
+    }
+
+    // Normalize Magnitude to 0-255
+    for (int r = cent; r < rows - cent; r++) {
+        for (int c = cent; c < cols - cent; c++) {
+            mag_buf[r * cols + c] = (mag_buf[r * cols + c] / max_mag) * 255.0f;
+        }
+    }
+
+    // 3. Peak Detection (Non-Maximum Suppression)
+    for (int r = cent + 1; r < rows - cent - 1; r++) {
+        for (int c = cent + 1; c < cols - cent - 1; c++) {
+            float vx = x_buf[r * cols + c];
+            if (vx == 0.0f) vx = 0.0001f; // Avoid division by zero
+            float slope = y_buf[r * cols + c] / vx;
+
+            float mag = mag_buf[r * cols + c];
+            float q = 255.0f, prev = 255.0f;
+
+            // Pre-calculate tangent angles in radians
+            float tan22_5 = std::tan(22.5 * M_PI / 180.0);
+            float tan67_5 = std::tan(67.5 * M_PI / 180.0);
+
+            if (slope <= tan22_5 && slope > -tan22_5) {
+                q = mag_buf[r * cols + (c - 1)];
+                prev = mag_buf[r * cols + (c + 1)];
+            }
+            else if (slope <= tan67_5 && slope > tan22_5) {
+                q = mag_buf[(r - 1) * cols + (c - 1)];
+                prev = mag_buf[(r + 1) * cols + (c + 1)];
+            }
+            else if (slope <= -tan22_5 && slope > -tan67_5) {
+                q = mag_buf[(r + 1) * cols + (c - 1)];
+                prev = mag_buf[(r - 1) * cols + (c + 1)];
+            }
+            else {
+                q = mag_buf[(r - 1) * cols + c];
+                prev = mag_buf[(r + 1) * cols + c];
+            }
+
+            if (mag > q && mag > prev) {
+                nms_buf[r * cols + c] = mag;
+            } else {
+                nms_buf[r * cols + c] = 0.0f;
+            }
+        }
+    }
+
+    // 4. Hysteresis Double Thresholding
+    // Pass 1: Mark Strong (255), Weak (1), Non-edge (0)
+    for (int r = cent + 1; r < rows - cent - 1; r++) {
+        for (int c = cent + 1; c < cols - cent - 1; c++) {
+            float val = nms_buf[r * cols + c];
+            if (val >= high_thresh) dst[r * cols + c] = 255;
+            else if (val >= low_thresh) dst[r * cols + c] = 1;
+            else dst[r * cols + c] = 0;
+        }
+    }
+
+    // Pass 2: Hardware-friendly iterative edge tracking (replaces recursion)
+    for (int iter = 0; iter < 5; iter++) { 
+        for (int r = cent + 2; r < rows - cent - 2; r++) {
+            for (int c = cent + 2; c < cols - cent - 2; c++) {
+                if (dst[r * cols + c] == 1) {
+                    bool connected = false;
+                    for (int i = -1; i <= 1; i++) {
+                        for (int j = -1; j <= 1; j++) {
+                            if (dst[(r + i) * cols + (c + j)] == 255) {
+                                connected = true;
+                            }
                         }
                     }
+                    if (connected) dst[r * cols + c] = 255;
                 }
-
-                if (connected)
-                    res.at<uchar>(i, j) = 255;
             }
         }
     }
 
-    return res;
-}
-
-/* -------- Full Pipeline -------- */
-cv::Mat customCanny(const cv::Mat& img)
-{
-    cv::Mat blurred = gaussianBlur(img);
-
-    cv::Mat mag, dir;
-    computeGradient(blurred, mag, dir);
-
-    cv::Mat nms = nonMaxSuppression(mag, dir);
-
-    return hysteresis(nms, 50, 150);
+    // Pass 3: Clean up remaining un-connected weak edges
+    for (int r = cent + 1; r < rows - cent - 1; r++) {
+        for (int c = cent + 1; c < cols - cent - 1; c++) {
+            if (dst[r * cols + c] == 1) dst[r * cols + c] = 0;
+        }
+    }
 }
