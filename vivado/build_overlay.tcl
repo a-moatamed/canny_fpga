@@ -1,72 +1,45 @@
-# SPDX-License-Identifier: MIT
-# Copyright (c) 2026 ARH Laboratory
-# Author: Abdelrahman Abomosa
+# vivado/build_overlay.tcl
 
-if { $argc < 3 } {
-  puts "Usage: vivado -mode batch -source vivado/build_overlay.tcl -tclargs <project_name> <part_name> <hls_ip_repo> [board_part]"
-  exit 1
-}
-
-set project_name [lindex $argv 0]
+# 1. Read Arguments from run_vivado.sh
+set proj_name [lindex $argv 0]
 set part_name [lindex $argv 1]
-set hls_ip_repo [file normalize [lindex $argv 2]]
-set board_part ""
-if { $argc >= 4 } {
-  set board_part [lindex $argv 3]
-}
+set hls_ip_repo [lindex $argv 2]
 
-set build_dir [file normalize "vivado/build/${project_name}"]
+# 2. Setup Project
+set proj_dir "./build/$proj_name"
+create_project -force $proj_name $proj_dir -part $part_name
 
-create_project ${project_name} ${build_dir} -part ${part_name} -force
-if { $board_part ne "" } {
-  set_property board_part ${board_part} [current_project]
-}
-
-set_property ip_repo_paths [list ${hls_ip_repo}] [current_project]
+# 3. Add HLS IP Repository (Using the absolute path passed by bash)
+set_property ip_repo_paths $hls_ip_repo [current_project]
 update_ip_catalog
 
-create_bd_design "design_1"
+# 4. Create Block Design
+create_bd_design $proj_name
 
-create_bd_cell -type ip -vlnv xilinx.com:ip:processing_system7 processing_system7_0
-apply_bd_automation -rule xilinx.com:bd_rule:processing_system7 \
-  -config { make_external "FIXED_IO, DDR" apply_board_preset "1" Master "Disable" Slave "Disable" } \
-  [get_bd_cells processing_system7_0]
+# 5. Add Zynq Processing System (The ARM Processor)
+create_bd_cell -type ip -vlnv xilinx.com:ip:processing_system7:5.5 processing_system7_0
+apply_bd_automation -rule xilinx.com:bd_rule:processing_system7 -config {make_external "FIXED_IO, DDR" apply_board_preset "1" Master "Disable" Slave "Disable" }  [get_bd_cells processing_system7_0]
 
-create_bd_cell -type ip -vlnv xilinx.com:hls:affine_accel:1.0 affine_accel_0
+# Enable High-Performance Port (HP0) so the FPGA can access the external DDR memory
+set_property -dict [list CONFIG.PCW_USE_S_AXI_HP0 {1}] [get_bd_cells processing_system7_0]
 
-apply_bd_automation -rule xilinx.com:bd_rule:axi4 \
-  -config { Clk "Auto" Master "/processing_system7_0/M_AXI_GP0" } \
-  [get_bd_intf_pins affine_accel_0/s_axi_control]
+# 6. Add Your Custom Canny IP
+create_bd_cell -type ip -vlnv xilinx.com:hls:canny_fpga_naive:1.0 canny_fpga_naive_0
 
-validate_bd_design
-save_bd_design
+# 7. Run Connection Automation (Automatically draws the AXI wires)
+apply_bd_automation -rule xilinx.com:bd_rule:axi4 -config { Clk_master {Auto} Clk_slave {Auto} Clk_xbar {Auto} Master {/processing_system7_0/M_AXI_GP0} Slave {/canny_fpga_naive_0/s_axi_CTRL} ddr_seg {Auto} intc_ip {New AXI Interconnect} master_apm {0}}  [get_bd_intf_pins canny_fpga_naive_0/s_axi_CTRL]
 
-generate_target all [get_files design_1.bd]
-make_wrapper -files [get_files design_1.bd] -top
+apply_bd_automation -rule xilinx.com:bd_rule:axi4 -config { Clk_master {Auto} Clk_slave {Auto} Clk_xbar {Auto} Master {/processing_system7_0/M_AXI_GP0} Slave {/canny_fpga_naive_0/s_axi_control} ddr_seg {Auto} intc_ip {New AXI Interconnect} master_apm {0}}  [get_bd_intf_pins canny_fpga_naive_0/s_axi_control]
 
-set wrapper_v [glob -nocomplain "${build_dir}/${project_name}.gen/sources_1/bd/design_1/hdl/design_1_wrapper.v"]
-if {[llength $wrapper_v] == 0} {
-  puts "ERROR: Could not locate design_1_wrapper.v"
-  exit 1
-}
-add_files -norecurse [lindex $wrapper_v 0]
-update_compile_order -fileset sources_1
+apply_bd_automation -rule xilinx.com:bd_rule:axi4 -config { Clk_master {Auto} Clk_slave {Auto} Clk_xbar {Auto} Master {/canny_fpga_naive_0/m_axi_gmem} Slave {/processing_system7_0/S_AXI_HP0} ddr_seg {Auto} intc_ip {New AXI Interconnect} master_apm {0}}  [get_bd_intf_pins processing_system7_0/S_AXI_HP0]
 
-launch_runs impl_1 -to_step write_bitstream -jobs 1
+# 8. Create Wrapper and Generate Bitstream
+make_wrapper -files [get_files $proj_dir/${proj_name}.srcs/sources_1/bd/$proj_name/${proj_name}.bd] -top
+add_files -norecurse $proj_dir/${proj_name}.srcs/sources_1/bd/$proj_name/hdl/${proj_name}_wrapper.v
+set_property top ${proj_name}_wrapper [current_fileset]
+
+# Launch Synthesis and Implementation
+launch_runs impl_1 -to_step write_bitstream -jobs 4
 wait_on_run impl_1
-
-set bit_files [glob -nocomplain "${build_dir}/${project_name}.runs/impl_1/*.bit"]
-if {[llength $bit_files] == 0} {
-  puts "ERROR: Bitstream not found."
-  exit 1
-}
-puts "Bitstream: [lindex $bit_files 0]"
-
-set hwh_files [glob -nocomplain "${build_dir}/${project_name}.gen/sources_1/bd/design_1/hw_handoff/*.hwh"]
-if {[llength $hwh_files] == 0} {
-  puts "ERROR: HWH not found."
-  exit 1
-}
-puts "HWH: [lindex $hwh_files 0]"
 
 exit
