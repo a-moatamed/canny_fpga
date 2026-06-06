@@ -43,7 +43,7 @@ add_custom_target(deploy
 
 # 5. NEW: Execute Script on PYNQ Board Target
 add_custom_target(run
-    COMMAND ${CMAKE_SOURCE_DIR}/scripts/run_on_pynq.sh pynq16 /home/xilinx/jupyter_notebooks/canny_edge_detector lab01_bringup.py
+    COMMAND ${CMAKE_SOURCE_DIR}/scripts/run_on_pynq.sh pynq16 /home/xilinx/jupyter_notebooks/canny_edge_detector run_canny.py
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     COMMENT "Executing hardware accelerator test on PYNQ board..."
 )
