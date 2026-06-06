@@ -27,9 +27,23 @@ add_custom_target(vivado
     COMMENT "Running Vivado Implementation (This will take 10-15 minutes)..."
 )
 
-# 3. FPGA Packaging Target
+# 3. FPGA Packaging Target (Fixed to point to where Vivado actually built it)
 add_custom_target(package
-    COMMAND ${CMAKE_SOURCE_DIR}/scripts/package_overlay.sh
+    COMMAND env BUILD_DIR=${CMAKE_SOURCE_DIR}/build/canny ${CMAKE_SOURCE_DIR}/scripts/package_overlay.sh
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     COMMENT "Packaging IP Core..."
+)
+
+# 4. Deploy to PYNQ Target (Fully automated SCP)
+add_custom_target(deploy
+    COMMAND ${CMAKE_SOURCE_DIR}/scripts/deploy_to_pynq.sh pynq16
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Deploying overlay and notebook to PYNQ..."
+)
+
+# 5. NEW: Execute Script on PYNQ Board Target
+add_custom_target(run
+    COMMAND ${CMAKE_SOURCE_DIR}/scripts/run_on_pynq.sh pynq16 /home/xilinx/jupyter_notebooks/canny_edge_detector lab01_bringup.py
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Executing hardware accelerator test on PYNQ board..."
 )

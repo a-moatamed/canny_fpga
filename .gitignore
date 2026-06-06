@@ -6,3 +6,6 @@ output/
 hls/canny_edge_detector/
 *.log
 *.jou
+overlay/
+canny-fpga/
+hls/build

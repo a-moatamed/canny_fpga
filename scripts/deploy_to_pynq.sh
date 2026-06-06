@@ -21,15 +21,15 @@ fi
 TARGET="xilinx@${HOST}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LAB_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+PROJ_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 PROJECT_NAME="${PROJECT_NAME:-canny}"
-BIT_FILE="${LAB_DIR}/overlay/${PROJECT_NAME}.bit"
-HWH_FILE="${LAB_DIR}/overlay/${PROJECT_NAME}.hwh"
-NOTEBOOK_SCRIPT="${LAB_DIR}/notebook/lab01_bringup.py"
+BIT_FILE="${PROJ_DIR}/overlay/${PROJECT_NAME}.bit"
+HWH_FILE="${PROJ_DIR}/overlay/${PROJECT_NAME}.hwh"
+NOTEBOOK_SCRIPT="${PROJ_DIR}/notebook/run_canny.py"
 
 if [[ ! -f "${BIT_FILE}" || ! -f "${HWH_FILE}" ]]; then
-  echo "Error: overlay files are missing in ${LAB_DIR}/overlay"
+  echo "Error: overlay files are missing in ${PROJ_DIR}/overlay"
   echo "Run ./scripts/package_overlay.sh first."
   exit 1
 fi

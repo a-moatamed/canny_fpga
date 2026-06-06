@@ -6,8 +6,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LAB_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-HLS_DIR="${LAB_DIR}/hls"
+PROJ_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+HLS_DIR="${PROJ_DIR}/hls"
 STAGE="${1:-all}"
 
 case "${STAGE}" in

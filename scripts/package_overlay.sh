@@ -6,11 +6,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LAB_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+PROJ_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 PROJECT_NAME="${PROJECT_NAME:-canny}"
-BUILD_DIR="${BUILD_DIR:-${LAB_DIR}/vivado/build/${PROJECT_NAME}}"
-OVERLAY_DIR="${OVERLAY_DIR:-${LAB_DIR}/overlay}"
+BUILD_DIR="${BUILD_DIR:-${PROJ_DIR}/vivado/build/${PROJECT_NAME}}"
+OVERLAY_DIR="${OVERLAY_DIR:-${PROJ_DIR}/overlay}"
 
 mkdir -p "${OVERLAY_DIR}"
 

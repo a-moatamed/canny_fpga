@@ -6,7 +6,7 @@ set part_name [lindex $argv 1]
 set hls_ip_repo [lindex $argv 2]
 
 # 2. Setup Project
-set proj_dir "./build/$proj_name"
+set proj_dir "./vivado/build/$proj_name"
 create_project -force $proj_name $proj_dir -part $part_name
 
 # 3. Add HLS IP Repository (Using the absolute path passed by bash)
