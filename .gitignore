@@ -3,3 +3,6 @@ build/
 __pycache__/
 .DS_Store
 output/
+hls/canny_edge_detector/
+*.log
+*.jou

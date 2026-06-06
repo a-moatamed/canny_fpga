@@ -6,10 +6,10 @@ project(CannyTiming)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(OpenCV REQUIRED)
+# find_package(OpenCV REQUIRED)
 
 # The host executable that you run for timing comparisons
-add_executable(canny_host hls/src/main.cpp hls/src/canny.cpp)
+add_executable(canny_host hls/src/main.cpp hls/src/canny.cpp hls/tb/tb_canny.cpp)
 target_include_directories(canny_host PRIVATE hls/include)
 target_link_libraries(canny_host ${OpenCV_LIBS})
 

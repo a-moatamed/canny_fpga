@@ -31,7 +31,9 @@ void canny_fpga_naive(
     // 1. Generate Gaussian 1st Derivative Masks 
     // (Vivado HLS will unroll this and create a static hardware ROM at compile time)
     for (int p = -cent; p <= cent; p++) {
+        #pragma HLS loop_tripcount min=128 max=1024 avg=512
         for (int q = -cent; q <= cent; q++) {
+            #pragma HLS loop_tripcount min=128 max=1024 avg=512
             maskx[p+cent][q+cent] = q * std::exp(-1.0f * ((p * p + q * q) / (2.0f * sig * sig)));
             masky[p+cent][q+cent] = p * std::exp(-1.0f * ((p * p + q * q) / (2.0f * sig * sig)));
         }
@@ -42,10 +44,14 @@ void canny_fpga_naive(
     // 2. Convolution: Blur + Gradient in a single step
     // Safe boundary to prevent reading outside the image
     for (int r = cent; r < rows - cent; r++) {
+        #pragma HLS loop_tripcount min=128 max=1024 avg=512
         for (int c = cent; c < cols - cent; c++) {
+            #pragma HLS loop_tripcount min=128 max=1024 avg=512
             float sumx = 0.0f, sumy = 0.0f;
             for (int p = -cent; p <= cent; p++) {
+                #pragma HLS loop_tripcount min=128 max=1024 avg=512
                 for (int q = -cent; q <= cent; q++) {
+                    #pragma HLS loop_tripcount min=128 max=1024 avg=512
                     float pixel = src[(r + p) * cols + (c + q)];
                     sumx += pixel * maskx[p + cent][q + cent];
                     sumy += pixel * masky[p + cent][q + cent];
@@ -66,14 +72,18 @@ void canny_fpga_naive(
 
     // Normalize Magnitude to 0-255
     for (int r = cent; r < rows - cent; r++) {
+        #pragma HLS loop_tripcount min=128 max=1024 avg=512
         for (int c = cent; c < cols - cent; c++) {
+            #pragma HLS loop_tripcount min=128 max=1024 avg=512
             mag_buf[r * cols + c] = (mag_buf[r * cols + c] / max_mag) * 255.0f;
         }
     }
 
     // 3. Peak Detection (Non-Maximum Suppression)
     for (int r = cent + 1; r < rows - cent - 1; r++) {
+        #pragma HLS loop_tripcount min=128 max=1024 avg=512
         for (int c = cent + 1; c < cols - cent - 1; c++) {
+            #pragma HLS loop_tripcount min=128 max=1024 avg=512
             float vx = x_buf[r * cols + c];
             if (vx == 0.0f) vx = 0.0001f; // Avoid division by zero
             float slope = y_buf[r * cols + c] / vx;
@@ -113,7 +123,9 @@ void canny_fpga_naive(
     // 4. Hysteresis Double Thresholding
     // Pass 1: Mark Strong (255), Weak (1), Non-edge (0)
     for (int r = cent + 1; r < rows - cent - 1; r++) {
+        #pragma HLS loop_tripcount min=128 max=1024 avg=512
         for (int c = cent + 1; c < cols - cent - 1; c++) {
+            #pragma HLS loop_tripcount min=128 max=1024 avg=512
             float val = nms_buf[r * cols + c];
             if (val >= high_thresh) dst[r * cols + c] = 255;
             else if (val >= low_thresh) dst[r * cols + c] = 1;
@@ -122,13 +134,18 @@ void canny_fpga_naive(
     }
 
     // Pass 2: Hardware-friendly iterative edge tracking (replaces recursion)
-    for (int iter = 0; iter < 5; iter++) { 
+    for (int iter = 0; iter < 5; iter++) {
+        #pragma HLS loop_tripcount min=128 max=1024 avg=512 
         for (int r = cent + 2; r < rows - cent - 2; r++) {
+            #pragma HLS loop_tripcount min=128 max=1024 avg=512
             for (int c = cent + 2; c < cols - cent - 2; c++) {
+                #pragma HLS loop_tripcount min=128 max=1024 avg=512
                 if (dst[r * cols + c] == 1) {
                     bool connected = false;
                     for (int i = -1; i <= 1; i++) {
+                        #pragma HLS loop_tripcount min=128 max=1024 avg=512
                         for (int j = -1; j <= 1; j++) {
+                            #pragma HLS loop_tripcount min=128 max=1024 avg=512
                             if (dst[(r + i) * cols + (c + j)] == 255) {
                                 connected = true;
                             }
@@ -142,7 +159,9 @@ void canny_fpga_naive(
 
     // Pass 3: Clean up remaining un-connected weak edges
     for (int r = cent + 1; r < rows - cent - 1; r++) {
+        #pragma HLS loop_tripcount min=128 max=1024 avg=512
         for (int c = cent + 1; c < cols - cent - 1; c++) {
+            #pragma HLS loop_tripcount min=128 max=1024 avg=512
             if (dst[r * cols + c] == 1) dst[r * cols + c] = 0;
         }
     }
