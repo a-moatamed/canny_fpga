@@ -9,6 +9,9 @@ void canny_fpga_naive(
     float* x_buf, float* y_buf, float* mag_buf, float* nms_buf,
     int rows, int cols, float low_thresh, float high_thresh) 
 {
+    #pragma HLS INTERFACE s_axilite port=return bundle=CTRL
+    #pragma HLS INTERFACE m_axi port=src offset=slave bundle=INPUT
+    #pragma HLS INTERFACE m_axi port=dst offset=slave bundle=OUTPUT
     const int cent = 2; // Fixed to 5x5 mask for hardware static array bounding
     const float sig = 1.0f;
     float maskx[5][5], masky[5][5];
