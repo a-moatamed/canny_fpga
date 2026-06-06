@@ -9,13 +9,25 @@ void canny_fpga_naive(
     float* x_buf, float* y_buf, float* mag_buf, float* nms_buf,
     int rows, int cols, float low_thresh, float high_thresh) 
 {
+    // AXI4-Lite Interfaces for control and scalar arguments
     #pragma HLS INTERFACE s_axilite port=return bundle=CTRL
-    #pragma HLS INTERFACE m_axi port=src offset=slave bundle=INPUT
-    #pragma HLS INTERFACE m_axi port=dst offset=slave bundle=OUTPUT
+    #pragma HLS INTERFACE s_axilite port=rows bundle=CTRL
+    #pragma HLS INTERFACE s_axilite port=cols bundle=CTRL
+    #pragma HLS INTERFACE s_axilite port=low_thresh bundle=CTRL
+    #pragma HLS INTERFACE s_axilite port=high_thresh bundle=CTRL
+
+    // AXI4-Master Interfaces for array pointers (All sharing the main DDR memory)
+    #pragma HLS INTERFACE m_axi port=src offset=slave bundle=gmem
+    #pragma HLS INTERFACE m_axi port=dst offset=slave bundle=gmem
+    #pragma HLS INTERFACE m_axi port=x_buf offset=slave bundle=gmem
+    #pragma HLS INTERFACE m_axi port=y_buf offset=slave bundle=gmem
+    #pragma HLS INTERFACE m_axi port=mag_buf offset=slave bundle=gmem
+    #pragma HLS INTERFACE m_axi port=nms_buf offset=slave bundle=gmem
+
     const int cent = 2; // Fixed to 5x5 mask for hardware static array bounding
     const float sig = 1.0f;
     float maskx[5][5], masky[5][5];
-
+    
     // 1. Generate Gaussian 1st Derivative Masks 
     // (Vivado HLS will unroll this and create a static hardware ROM at compile time)
     for (int p = -cent; p <= cent; p++) {
